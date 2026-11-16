@@ -14,7 +14,7 @@ const RULES_BY_YEAR = {
     soli: { rate: 0.055, freigrenze: 20350, milderung: 0.119 },
     bbg: { rv: 101400, kv: 69750 },
     midijob: { lower: 603, upper: 2000 }, // monthly; employee contributions are reduced in this band
-    rates: { rv: 0.093, av: 0.013, kvGeneral: 0.073, kvReduced: 0.07, pv: 0.018, pvSaxony: 0.023, pvChildless: 0.006, pvChildDiscount: 0.0025 },
+    rates: { rv: 0.093, av: 0.013, kvGeneral: 0.073, kvReduced: 0.07, pv: 0.018, pvSaxony: 0.023, pvChildless: 0.006, pvChildDiscount: 0.0025, minijobRv: 0.036 },
     zusatzAverage: 2.9,
     vorsorgeCap: 1900,
     church: { BY: 0.08, BW: 0.08, other: 0.09 },
@@ -81,11 +81,14 @@ function calcNet(p, rules = RULES) {
 
   // Übergangsbereich (§20 Abs. 2a SGB IV): between €603.01 and €2,000 a month the employee
   // pays on a reduced base, upper / (upper - lower) * (pay - lower). Far below both ceilings.
-  const M = RU.midijob, gm = g / 12;
+  // Up to €603 a month (mini-job) the employee pays only their pension share, 3.6%, unless they
+  // opt out, and no health, care or unemployment insurance.
+  const M = RU.midijob, gm = g / 12, mini = gm <= M.lower;
   const sb = gm > M.lower && gm < M.upper ? 12 * M.upper / (M.upper - M.lower) * (gm - M.lower) : null;
   const sRV = sb ?? bRV, sKV = sb ?? bKV;
-  const rv = sRV * R.rv, av = sRV * R.av, kv = sKV * (R.kvGeneral + zHalf);
-  const pv = sKV * pvRate, social = rv + av + kv + pv;
+  const rv = mini ? g * R.minijobRv : sRV * R.rv, av = mini ? 0 : sRV * R.av;
+  const kv = mini ? 0 : sKV * (R.kvGeneral + zHalf), pv = mini ? 0 : sKV * pvRate;
+  const social = rv + av + kv + pv;
 
   // Payroll tax (PAP) works out the deductible insurance from full gross pay, also in the band.
   const pvFull = bKV * pvRate, kvVor = bKV * (R.kvReduced + zHalf) + pvFull;
@@ -119,6 +122,8 @@ function runChecks(rules) {
     { label: `Social security at ${e(bandPay)} (reduced band)`, note: `Pay of ${e(mj.lower)} to ${e(mj.upper)} a month`,
       got: Math.round(calcNet({ ...base, gross: bandPay }, rules).social),
       expected: Math.round(12 * mj.upper / (mj.upper - mj.lower) * (bandPay / 12 - mj.lower) * fullRate) },
+    { label: `Social security at ${e(6000)} (mini-job)`, note: 'Pension share only', got: Math.round(calcNet({ ...base, gross: 6000 }, rules).social),
+      expected: Math.round(6000 * R.minijobRv) },
     { label: `Health capped above ${e(rules.bbg.kv)}`, note: `${rules.year} pay limit`,
       got: Math.round(calcNet({ ...base, gross: rules.bbg.kv + 50000 }, rules).kv),
       expected: Math.round(rules.bbg.kv * (R.kvGeneral + rules.zusatzAverage / 200)) }

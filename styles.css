@@ -164,7 +164,7 @@ details[open] summary{margin-bottom:14px}
 
 /* Waterfall */
 .wf{display:flex;flex-direction:column;gap:6px;font-size:13px}
-.wf .r{display:grid;grid-template-columns:104px minmax(0,1fr) 74px;gap:8px;align-items:center}
+.wf .r{display:grid;grid-template-columns:96px minmax(0,1fr) 88px;gap:8px;align-items:center}
 .wf .r span{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .wf .r.key span{color:var(--fg);font-weight:700}
 .wf .trk{position:relative;height:16px}
@@ -283,3 +283,5 @@ table.rules{border-collapse:collapse;width:100%;font-size:14px;min-width:520px}
 .panel details summary{font-family:var(--display);font-size:15px}
 .panel details[open] summary{margin-bottom:12px}
 .hint a{color:var(--accent)}
+@media (max-width:420px){nav.tabs{gap:0}nav.tabs a{padding:10px 7px;font-size:13px}}
+.swipe{display:none;margin:0 0 8px}@media (max-width:640px){.swipe{display:block}}

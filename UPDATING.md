@@ -56,6 +56,7 @@ All amounts are yearly unless marked. German terms are given so you can search f
 | `rates.kvGeneral`, `kvReduced` | Employee's half of the general (14.6%) and reduced (14.0%) health rate | allgemeiner / ermäßigter Beitragssatz | Same |
 | `rates.pv` | Employee's share of care insurance (3.6% total, split evenly) | Pflegeversicherung | Same |
 | `rates.pvSaxony` | Employee's care share in Saxony, which is higher | Pflegeversicherung Sachsen | Same |
+| `rates.minijobRv` | Employee's pension share in a mini-job (18.6% minus the employer's flat 15%) | Eigenanteil Rentenversicherung Minijob | Minijob-Zentrale. Changes only if the pension rate changes |
 | `rates.pvChildless`, `pvChildDiscount` | Childless surcharge (age 23+) and discount per child from the 2nd | Kinderlosenzuschlag, Beitragsabschlag | Same |
 | `zusatzAverage` | Average extra health insurance rate, in % | durchschnittlicher Zusatzbeitragssatz | Announced by the Federal Ministry of Health (BMG) around 1 November |
 | `vorsorgeCap` | Limit on deductible health, care and unemployment insurance in payroll tax | Höchstbetrag Vorsorgepauschale | BMF PAP for the year |

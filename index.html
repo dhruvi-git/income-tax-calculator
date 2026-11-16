@@ -45,7 +45,7 @@
           <h2 id="s1"><i>1</i>Your job offer</h2>
           <div class="field">
             <label class="lbl" for="gross">Gross salary</label>
-            <div class="money"><span>€</span><input id="gross" inputmode="numeric" autocomplete="off" value="60,000" aria-describedby="grossHint">
+            <div class="money"><span>€</span><input id="gross" inputmode="decimal" autocomplete="off" value="60,000" aria-describedby="grossHint">
               <div class="seg2" role="group" aria-label="Salary period">
                 <button type="button" id="perYear" aria-pressed="true">per year</button>
                 <button type="button" id="perMonth" aria-pressed="false">per month</button>
@@ -208,6 +208,7 @@
       <div><h2>Compare offers</h2><p>See job offers and cities side by side. The first column always shows what's in the calculator right now.</p></div>
       <button type="button" class="btn" id="saveScenario2">Add current offer</button>
     </div>
+    <p class="hint swipe" id="cmpSwipe">Swipe the table sideways to see every offer →</p>
     <div class="panel"><div class="cmpwrap" id="cmp"></div></div>
     <div class="toast" id="cmpToast" role="status"></div>
     <p class="fine" style="margin-top:0">The two examples can be removed. Saved offers are kept in this browser only.</p>

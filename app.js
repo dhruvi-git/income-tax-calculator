@@ -66,7 +66,7 @@ function costDefs(S, rate) {
 
 // Exchange rate: the European Central Bank reference rate, from the free Frankfurter API
 // (no key needed). The last rate fetched is cached, so the page opens with it straight away.
-const FX_URL = 'https://api.frankfurter.dev/v1/latest?base=EUR&symbols=INR';
+const FX_URL = 'https://api.frankfurter.dev/v2/rates?base=EUR&quotes=INR';
 const FX_BUILT_IN = { rate: 106.20, date: '2026-10-27', src: 'built-in' };
 const validFx = x => x && Number.isFinite(x.rate) && x.rate >= 50 && x.rate <= 500 && typeof x.date === 'string';
 let fxInfo = (() => { try { const c = JSON.parse(localStorage.getItem('w49calc.fxLive')); return validFx(c) ? { ...c, src: 'cached' } : FX_BUILT_IN; } catch { return FX_BUILT_IN; } })();
@@ -200,8 +200,10 @@ $('customRate').oninput = () => { S.customRate = clamp(parseFloat($('customRate'
 ['zusatz', 'age', 'customRate', 'fx'].forEach(id => { $(id).onchange = syncInputs; }); // show the value actually used
 $('size').oninput = () => { S.size = +$('size').value; renderSizePresets(); update(); };
 $('housing').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.v === S.housing) return;
   S.housing = b.dataset.v; S.size = S.housing === 'wg' ? 25 : 45; delete S.overrides.internet; delete S.overrides.tv; syncInputs(); update(); });
 $('lifestyle').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.v === S.lifestyle) return;
   S.lifestyle = b.dataset.v; delete S.overrides.food; delete S.overrides.personal; syncInputs(); update(); });
 $('resetCosts').onclick = () => { S.overrides = {}; update(); };
 $('curEUR').onclick = () => { S.cur = 'eur'; syncInputs(); update(); };
@@ -210,20 +212,23 @@ $('showMonth').onclick = () => { S.show = 'month'; syncInputs(); update(); };
 $('showYear').onclick = () => { S.show = 'year'; syncInputs(); update(); };
 $('fx').oninput = () => { const v = parseFloat($('fx').value); if (v >= 50 && v <= 500) { S.fx = v; S.fxCustom = true; update(); } };
 $('fxReset').onclick = () => { S.fxCustom = false; S.fx = fxInfo.rate; syncInputs(); update(); };
+let fxLoading = true;
 async function loadFx() {
   try {
     const res = await fetch(FX_URL, { cache: 'no-store', signal: AbortSignal.timeout?.(8000) });
-    const j = await res.json(), next = { rate: +j?.rates?.INR, date: j?.date };
+    const j = await res.json(), row = Array.isArray(j) ? j.find(x => x.quote === 'INR') : null;
+    const next = { rate: +row?.rate, date: row?.date };
     if (!res.ok || !validFx(next)) throw new Error('bad rate');
     fxInfo = { ...next, src: 'live' }; store.set('fxLive', next);
-    if (!S.fxCustom) { S.fx = fxInfo.rate; syncInputs(); }
+    if (!S.fxCustom) { S.fx = fxInfo.rate; $('fx').value = S.fx; }
   } catch {} // keep the cached or built-in rate
-  update();
+  fxLoading = false; update({ keepCosts: true });
 }
 function renderFx() {
   const d = new Date(fxInfo.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const ecb = `₹${fxInfo.rate.toFixed(2)} per euro`;
   $('fxInfo').textContent = S.fxCustom ? `You're using your own rate. The European Central Bank rate on ${d} was ${ecb}.`
+    : fxLoading ? `Loading today's European Central Bank rate. Meanwhile using ${ecb} from ${d}.`
     : fxInfo.src === 'live' ? `European Central Bank reference rate on ${d}, updated every working day. Money transfer services usually give 1% to 3% less.`
     : `Today's rate couldn't be loaded, so this is the ${fxInfo.src === 'cached' ? 'last rate fetched' : 'built-in rate'}, from ${d}. Money transfer services usually give 1% to 3% less.`;
   $('fxReset').hidden = !S.fxCustom;
@@ -417,6 +422,7 @@ function renderCompare() {
       ${isBest(x) ? '<span class="badge win">Most left over</span>' : ''}
       <b>${esc(findCity(x.S.city).name)}</b><small>${eur(x.S.gross)} a year</small>
       ${x.live ? '' : `<button type="button" class="x" data-del="${esc(x.id)}" aria-label="Remove ${esc(x.label)}">Remove</button>`}</div></th>`).join('');
+  $('cmpSwipe').hidden = !scenarios.length;
   $('cmp').innerHTML = `<table class="cmp"><thead><tr><td></td>${hd}</tr></thead><tbody>
     ${row('Family situation', x => `<td style="font-weight:400">${['', 'Single', 'Single parent', 'Married, I earn', 'Married, both earn'][x.S.taxClass]}${x.S.kids ? `, ${x.S.kids} child${x.S.kids > 1 ? 'ren' : ''}` : ''}</td>`)}
     ${row('Gross per month', x => `<td>${fmt(x.C.r.gross / 12)}</td>`)}
@@ -454,7 +460,7 @@ function renderExplorer() {
   // Line chart
   const pts = []; for (let g = 20000; g <= 150000; g += 1000) pts.push({ g, n: calcNet({ ...base(), gross: g }).net / 12 });
   const W = Math.max(300, Math.round($('lineChart').clientWidth || 680)), H = W < 500 ? 240 : 300, L = 54, Rm = 16, T = 18, B = 40;
-  const k = S.cur === 'inr' ? S.fx : 1, topN = Math.max(...pts.map(p => p.n)), stepD = 10 ** Math.floor(Math.log10(topN * k));
+  const k = S.cur === 'inr' ? S.fx : 1, topN = Math.max(...pts.map(p => p.n)), mag = 10 ** Math.floor(Math.log10(topN * k)), stepD = mag * ([1, 2, 5, 10].find(m => topN * k / (mag * m) <= 8) || 10);
   const ymax = Math.ceil(topN * k / stepD) * stepD / k;
   const X = g => L + (g - 20000) / 130000 * (W - L - Rm), Y = v => T + (1 - v / ymax) * (H - T - B);
   const yt = []; for (let d = 0; d <= ymax * k + 1; d += stepD) yt.push(d / k);
@@ -544,11 +550,11 @@ function renderMethod() {
     ['Pension and unemployment insurance, your share', `${pct(Rt.rv)} and ${pct(Rt.av)}`, 'rates'], ['Health insurance, your share', `${pct(Rt.kvGeneral)} plus half your insurer's extra rate (${A.zusatzAverage}% on average)`, 'rates'],
     ['Care insurance, your share', `${pct(Rt.pv)}; ${pct(Rt.pvChildless)} more if 23 or older with no children; ${pct(Rt.pvChildDiscount)} less per child from the 2nd`, 'rates'],
     ['Pay limit for health and care insurance', `${eur(A.bbg.kv)} a year`, 'bbg'], ['Pay limit for pension and unemployment insurance', `${eur(A.bbg.rv)} a year`, 'bbg'],
-    ['Reduced contributions on low pay', `${eur(A.midijob.lower)} to ${eur(A.midijob.upper)} a month`, 'rates'],
+    ['Reduced contributions on low pay', `${eur(A.midijob.lower)} to ${eur(A.midijob.upper)} a month; up to ${eur(A.midijob.lower)} (mini-job) only ${pct(Rt.minijobRv)} pension`, 'rates'],
     ['Limit on tax-deductible health, care and unemployment insurance', `${eur(A.vorsorgeCap)} a year, unless health and care alone are higher`, 'pap'],
     ['Child benefit and child tax allowance', `${eur(A.kindergeld)} a month and ${eur(A.kinderfreibetrag)} a year per child`, 'kg'],
     ['EU Blue Card minimum salary', `${eur(A.blueCard.standard)}, or ${eur(A.blueCard.shortage, 2)} for IT, STEM and health jobs`, 'bc'],
-    [`EU Blue Card minimum salary from January ${A.blueCardNext.year} (expected, not official yet)`, `${eur(A.blueCardNext.standard)}, or ${eur(A.blueCardNext.shortage, 2)} for IT, STEM and health jobs`, 'bcNext']
+    ...(A.blueCardNext ? [[`EU Blue Card minimum salary from January ${A.blueCardNext.year} (expected, not official yet)`, `${eur(A.blueCardNext.standard)}, or ${eur(A.blueCardNext.shortage, 2)} for IT, STEM and health jobs`, 'bcNext']] : [])
   ];
 
   // Worked example with the calculator's current settings (yearly figures).
