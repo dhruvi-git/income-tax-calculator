@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wings49 Salary Calculator</title>
+<meta name="description" content="Work out take-home pay, living costs and savings for a German job offer. Covers 49 cities, tax classes I to IV and the EU Blue Card salary.">
+<meta name="theme-color" content="#522583">
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<noscript><p class="fine">This calculator needs JavaScript. Please turn it on and reload the page.</p></noscript>
+<div class="wrap">
+  <header>
+    <div class="brandrow">
+      <img src="logo.png" alt="Wings49 logo" width="42" height="42">
+      <div class="brand"><b>Wings49</b><h1>Income & Tax Salary Calculator</h1></div>
+    </div>
+    <div class="hdr-right">
+      <span class="year" id="yearTag">Tax year 2026</span>
+      <div class="seg2" role="group" aria-label="Currency">
+        <button type="button" id="curEUR" aria-pressed="true">€ Euro</button>
+        <button type="button" id="curINR" aria-pressed="false">₹ Rupee</button>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Views">
+    <a href="#calculator" data-view="calculator">Calculator</a>
+    <a href="#compare" data-view="compare">Compare<span class="full"> offers</span></a>
+    <a href="#explorer" data-view="explorer"><span class="full">Salary </span>explorer</a>
+    <a href="#method" data-view="method"><span class="full">How it's calculated</span><span class="short">Method</span></a>
+  </nav>
+
+  <main>
+  <!-- Calculator -->
+  <section class="view" id="v-calculator">
+    <div class="grid">
+      <div class="steps">
+        <section class="step" aria-labelledby="s1">
+          <h2 id="s1"><i>1</i>Your job offer</h2>
+          <div class="field">
+            <label class="lbl" for="gross">Gross salary</label>
+            <div class="money"><span>€</span><input id="gross" inputmode="numeric" autocomplete="off" value="60,000" aria-describedby="grossHint">
+              <div class="seg2" role="group" aria-label="Salary period">
+                <button type="button" id="perYear" aria-pressed="true">per year</button>
+                <button type="button" id="perMonth" aria-pressed="false">per month</button>
+              </div>
+            </div>
+            <input type="range" id="grossRange" min="20000" max="150000" step="500" value="60000" aria-label="Gross salary per year">
+            <div class="hint" id="grossHint">The salary in your contract (Brutto), before any deductions.</div>
+            <div class="inr-line" id="grossInr"></div>
+          </div>
+          <div class="field">
+            <span class="lbl" id="tcLbl">Family situation</span>
+            <div class="cards" role="group" aria-labelledby="tcLbl" id="taxClass">
+              <button type="button" data-v="1" aria-pressed="true"><b>Single</b><span>Tax class I</span></button>
+              <button type="button" data-v="2" aria-pressed="false"><b>Single parent</b><span>Tax class II</span></button>
+              <button type="button" data-v="3" aria-pressed="false"><b>Married, I earn</b><span>Tax class III, partner earns little or nothing</span></button>
+              <button type="button" data-v="4" aria-pressed="false"><b>Married, both earn</b><span>Tax class IV, similar incomes</span></button>
+            </div>
+          </div>
+          <div class="row2">
+            <div class="field">
+              <span class="lbl" id="kidsLbl">Children</span>
+              <div class="stepper" role="group" aria-labelledby="kidsLbl">
+                <button type="button" id="kidsMinus" aria-label="Fewer children">−</button>
+                <output id="kids">0</output>
+                <button type="button" id="kidsPlus" aria-label="More children">+</button>
+              </div>
+            </div>
+            <div class="field">
+              <label class="lbl" for="visa">Visa route</label>
+              <select id="visa">
+                <option value="standard">EU Blue Card, standard</option>
+                <option value="shortage">EU Blue Card, IT, STEM or health</option>
+                <option value="none">Other visa or not sure</option>
+              </select>
+            </div>
+          </div>
+          <label class="switch" for="church"><span><b>I'm a registered church member</b><br><span class="hint">Registered Catholic and Protestant members pay church tax, 8% or 9% of their income tax. Most newcomers don't.</span></span><input type="checkbox" id="church"></label>
+          <details>
+            <summary>Health insurer, age and state</summary>
+            <div class="row2">
+              <div class="field">
+                <label class="lbl" for="zusatz">Health insurer's extra rate (%)</label>
+                <input class="num" id="zusatz" type="number" step="0.1" min="0" max="5" value="2.9">
+                <div class="hint" id="zusatzHint">Each insurer (TK, AOK, Barmer and others) sets its own. 2.9% is the 2026 average.</div>
+              </div>
+              <div class="field">
+                <label class="lbl" for="age">Your age</label>
+                <input class="num" id="age" type="number" min="18" max="67" value="28">
+                <div class="hint" id="ageHint">From age 23, people without children pay 0.6% more for care insurance.</div>
+              </div>
+              <div class="field">
+                <label class="lbl" for="state">Federal state</label>
+                <select id="state">
+                  <option value="BW">Baden-Württemberg</option><option value="BY">Bavaria</option><option value="BE">Berlin</option>
+                  <option value="BB">Brandenburg</option><option value="HB">Bremen</option><option value="HH">Hamburg</option>
+                  <option value="HE">Hesse</option><option value="MV">Mecklenburg-Vorpommern</option><option value="NI">Lower Saxony</option>
+                  <option value="NW">North Rhine-Westphalia</option><option value="RP">Rhineland-Palatinate</option><option value="SL">Saarland</option>
+                  <option value="SN">Saxony</option><option value="ST">Saxony-Anhalt</option><option value="SH">Schleswig-Holstein</option><option value="TH">Thuringia</option>
+                </select>
+                <div class="hint">Filled in from your city. It changes church tax, and care insurance in Saxony.</div>
+              </div>
+            </div>
+          </details>
+        </section>
+
+        <section class="step" aria-labelledby="s2">
+          <h2 id="s2"><i>2</i>Where you'll live</h2>
+          <div class="field">
+            <label class="lbl" for="cityInput">City</label>
+            <div class="combo">
+              <input id="cityInput" role="combobox" aria-expanded="false" aria-controls="cityList" aria-autocomplete="list" autocomplete="off" placeholder="Search 49 cities">
+              <ul id="cityList" role="listbox" hidden></ul>
+            </div>
+            <div class="cityinfo" id="cityInfo"></div>
+          </div>
+          <div class="field" id="customWrap" hidden>
+            <label class="lbl" for="customRate">Rent per m² in your town (€)</label>
+            <input class="num" id="customRate" type="number" step="0.1" min="0" value="9.75">
+            <div class="hint">We start with the German average of €9.75. A local listings site will give you a better figure.</div>
+          </div>
+          <div class="field">
+            <span class="lbl" id="houseLbl">Housing</span>
+            <div class="cards" role="group" aria-labelledby="houseLbl" id="housing">
+              <button type="button" data-v="own" aria-pressed="true"><b>My own flat</b><span>All costs are yours</span></button>
+              <button type="button" data-v="wg" aria-pressed="false"><b>Shared flat (WG)</b><span>A room, sharing with 2 others</span></button>
+            </div>
+          </div>
+          <div class="field">
+            <label class="lbl" for="size"><span id="sizeLbl">Flat size</span>: <span id="sizeOut">45 m²</span></label>
+            <div class="chips" id="sizePresets"></div>
+            <input type="range" id="size" min="12" max="110" step="1" value="45">
+          </div>
+        </section>
+
+        <section class="step" aria-labelledby="s3">
+          <h2 id="s3"><i>3</i>Monthly living costs <small><button type="button" class="linkbtn" id="resetCosts">Reset to defaults</button></small></h2>
+          <div class="field">
+            <span class="lbl" id="lifeLbl">Lifestyle</span>
+            <div class="cards three" role="group" aria-labelledby="lifeLbl" id="lifestyle">
+              <button type="button" data-v="frugal" aria-pressed="false"><b>Saver</b><span>Cook at home, few extras</span></button>
+              <button type="button" data-v="typical" aria-pressed="true"><b>Typical</b><span>National averages</span></button>
+              <button type="button" data-v="comfort" aria-pressed="false"><b>Comfortable</b><span>Eat out, travel, hobbies</span></button>
+            </div>
+          </div>
+          <div class="costs" id="costs"></div>
+        </section>
+      </div>
+
+      <aside class="result" aria-label="Your results">
+        <div class="sr-only" id="srStatus" role="status"></div>
+        <div class="seg2" role="group" aria-label="Show amounts" style="align-self:flex-end">
+          <button type="button" id="showMonth" aria-pressed="true">Monthly</button>
+          <button type="button" id="showYear" aria-pressed="false">Yearly</button>
+        </div>
+        <div class="card hero" id="take">
+          <span class="lbl" id="netLbl">Take-home pay per month</span>
+          <div class="big" id="net">€0</div>
+          <div class="sub" id="netSub"></div>
+          <div class="hbar" aria-hidden="true"><i id="bNet" style="background:#fff"></i><i id="bTax" style="background:#caaf66"></i><i id="bSoc" style="background:#7fc2dc"></i></div>
+          <div class="legend">
+            <div><span class="dot" style="background:#fff"></span>You keep<em id="lNet"></em></div>
+            <div><span class="dot" style="background:#caaf66"></span>Taxes<em id="lTax"></em></div>
+            <div><span class="dot" style="background:#7fc2dc"></span>Social security<em id="lSoc"></em></div>
+          </div>
+          <div class="pills" id="heroPills"></div>
+        </div>
+
+        <div class="card">
+          <span class="lbl" id="leftLbl">Left after living costs per month</span>
+          <div class="leftnum" id="leftOver">€0</div>
+          <div class="hint" id="leftSub"></div>
+          <div class="pills" id="leftPills"></div>
+        </div>
+
+        <div class="card">
+          <span class="lbl">From gross pay to money left, per month</span>
+          <div class="wf" id="wf"></div>
+        </div>
+
+        <div class="card">
+          <span class="lbl">Where the deductions go</span>
+          <div class="lines" id="lines"></div>
+        </div>
+
+        <div class="card">
+          <div class="btnrow">
+            <button type="button" class="btn" id="saveScenario">Save to compare</button>
+            <button type="button" class="btn ghost" id="copySummary">Copy summary</button>
+          </div>
+          <div class="toast" id="toast" role="status"></div>
+          <textarea id="copyFallback" hidden readonly aria-label="Summary text to copy" style="width:100%;height:120px;margin-top:8px;font:12.5px var(--body);border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--surface);color:var(--fg)"></textarea>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- Compare -->
+  <section class="view" id="v-compare" hidden>
+    <div class="vhead">
+      <div><h2>Compare offers</h2><p>See job offers and cities side by side. The first column always shows what's in the calculator right now.</p></div>
+      <button type="button" class="btn" id="saveScenario2">Add current offer</button>
+    </div>
+    <div class="panel"><div class="cmpwrap" id="cmp"></div></div>
+    <div class="toast" id="cmpToast" role="status"></div>
+    <p class="fine" style="margin-top:0">The two examples can be removed. Saved offers are kept in this browser only.</p>
+  </section>
+
+  <!-- Explorer -->
+  <section class="view" id="v-explorer" hidden>
+    <div class="vhead">
+      <div><h2>Salary explorer</h2><p id="exIntro">Uses your family situation, city and costs from the calculator.</p></div>
+    </div>
+    <div class="panel">
+      <h3>Take-home pay at every salary</h3>
+      <p class="desc">Take-home pay per month for any gross salary from €20,000 to €150,000. Hover over or tap the chart to read a point.</p>
+      <div class="chart" id="lineChart"></div>
+      <div class="field" style="margin-top:18px">
+        <label class="lbl" for="raise">What a <span id="raiseOut">10%</span> raise is worth</label>
+        <div class="chips" id="raisePresets" role="group" aria-label="Common raises"></div>
+        <input type="range" id="raise" min="1" max="30" step="1" value="10" aria-describedby="raiseHint">
+        <div class="hint" id="raiseHint"></div>
+      </div>
+      <div class="raise" id="raiseStats"></div>
+    </div>
+    <div class="panel">
+      <h3 id="crTitle">Where your salary goes furthest</h3>
+      <p class="desc" id="crDesc"></p>
+      <div class="cityrank" id="cityRank"></div>
+      <button type="button" class="linkbtn" id="crMore" style="margin-top:12px">Show all 49 cities</button>
+    </div>
+  </section>
+
+  <!-- Method -->
+  <section class="view" id="v-method" hidden>
+    <div class="vhead">
+      <div><h2>How it's calculated</h2><p>How we get from the salary in your contract to the money in your account, in plain words. Rules as of <span id="asOf">October 2026</span>.</p></div>
+    </div>
+    <div class="panel">
+      <h3>Your salary, step by step</h3>
+      <p class="desc" id="exampleIntro"></p>
+      <div class="receipt" id="methodExample"></div>
+      <p class="hint" style="margin-top:14px">Your real payslip can differ by a few euros a month. For an official figure, use the <a href="https://www.bmf-steuerrechner.de" target="_blank" rel="noopener">German Finance Ministry's tax calculator</a>.</p>
+    </div>
+    <div class="panel">
+      <h3>What each deduction is</h3>
+      <p class="desc">Every employee in Germany pays these. They come straight out of your pay before it reaches you.</p>
+      <div class="explain" id="methodSteps"></div>
+    </div>
+    <div class="twocol">
+      <div class="panel prose">
+        <h3>Not included yet</h3>
+        <ul>
+          <li>Private health insurance, tax classes V and VI</li>
+          <li>Bonuses, 13th-month salary, company car, shares</li>
+          <li>Moving costs, furniture and the rent deposit (usually up to 3 months' cold rent)</li>
+          <li>Money back from your yearly tax return</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Exchange rate</h3>
+        <p class="desc">Used for every ₹ figure. Mid-market rate from xe.com on 27 October 2026. Money transfer services usually give 1% to 3% less. Change it here if you like.</p>
+        <label class="lbl" for="fx">Rupees per euro</label>
+        <input class="num tnum" id="fx" type="number" step="0.01" min="50" max="500" value="106.20" style="max-width:180px">
+      </div>
+    </div>
+    <div class="panel">
+      <details>
+        <summary>All tax and insurance figures for 2026, with sources</summary>
+        <div class="cmpwrap"><table class="rules" id="rulesTax"></table></div>
+      </details>
+    </div>
+    <div class="panel">
+      <details>
+        <summary>Living cost figures, with sources</summary>
+        <div class="cmpwrap"><table class="rules" id="rulesCost"></table></div>
+      </details>
+    </div>
+    <div class="panel">
+      <details>
+        <summary>Accuracy checks</summary>
+        <p class="desc">We compare the calculator against official German test figures every time this page opens.</p>
+        <div class="cmpwrap"><table class="rules" id="tests"></table></div>
+      </details>
+    </div>
+  </section>
+  </main>
+
+  <p class="fine">This calculator gives an estimate for planning, not tax advice. It uses the 2026 German rules for employees with public (statutory) health insurance. Rents are averages from listings, and newcomers often pay more. See <a href="#method">How it's calculated</a> for the details and sources.</p>
+</div>
+
+<div class="mbar" id="mbar" role="group" aria-label="Summary">
+  <div><small>Take-home / month</small><b id="mNet">€0</b></div>
+  <div><small>Left over</small><b id="mLeft">€0</b></div>
+  <a href="#take">Details</a>
+</div>
+
+<script src="engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
