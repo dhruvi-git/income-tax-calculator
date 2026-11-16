@@ -21,7 +21,7 @@
       <div class="brand"><b>Wings49</b><h1>Income & Tax Salary Calculator</h1></div>
     </div>
     <div class="hdr-right">
-      <span class="year" id="yearTag">Tax year 2026</span>
+      <span id="yearBox"><span class="year">Tax year 2026</span></span>
       <div class="seg2" role="group" aria-label="Currency">
         <button type="button" id="curEUR" aria-pressed="true">€ Euro</button>
         <button type="button" id="curINR" aria-pressed="false">₹ Rupee</button>
@@ -266,14 +266,15 @@
       </div>
       <div class="panel">
         <h3>Exchange rate</h3>
-        <p class="desc">Used for every ₹ figure. Mid-market rate from xe.com on 27 October 2026. Money transfer services usually give 1% to 3% less. Change it here if you like.</p>
+        <p class="desc"><span id="fxInfo">Used for every ₹ figure.</span> You can type your own rate.</p>
         <label class="lbl" for="fx">Rupees per euro</label>
         <input class="num tnum" id="fx" type="number" step="0.01" min="50" max="500" value="106.20" style="max-width:180px">
+        <button type="button" class="linkbtn" id="fxReset" style="margin-left:10px" hidden>Use today's rate</button>
       </div>
     </div>
     <div class="panel">
       <details>
-        <summary>All tax and insurance figures for 2026, with sources</summary>
+        <summary>All tax and insurance figures for <span class="ruleYear">2026</span>, with sources</summary>
         <div class="cmpwrap"><table class="rules" id="rulesTax"></table></div>
       </details>
     </div>
@@ -293,7 +294,7 @@
   </section>
   </main>
 
-  <p class="fine">This calculator gives an estimate for planning, not tax advice. It uses the 2026 German rules for employees with public (statutory) health insurance. Rents are averages from listings, and newcomers often pay more. See <a href="#method">How it's calculated</a> for the details and sources.</p>
+  <p class="fine">This calculator gives an estimate for planning, not tax advice. It uses the <span class="ruleYear">2026</span> German rules for employees with public (statutory) health insurance. Rents are averages from listings, and newcomers often pay more. See <a href="#method">How it's calculated</a> for the details and sources.</p>
 </div>
 
 <div class="mbar" id="mbar" role="group" aria-label="Summary">

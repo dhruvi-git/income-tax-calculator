@@ -32,7 +32,7 @@ const findCity = id => CITIES.find(c => c.id === id) || OTHER;
 const COST_SRC = {
   bk: { name: 'Deutscher Mieterbund, Betriebskostenspiegel (billing year 2024, Dec 2025)', url: 'https://mieterbund.de' },
   bdew: { name: 'BDEW electricity price analysis, Aug 2026', url: 'https://www.bdew.de' },
-  dt: { name: 'Deutschlandticket price 2026', url: 'https://www.zdfheute.de/politik/deutschlandticket-dticket-verkehr-nahverkehr-preis-erhoehung-100.html' },
+  get dt() { const [name, url] = RULES.sources.ticket; return { name, url }; },
   c24: { name: 'Check24 average 15 to 20 GB plan (2024)', url: 'https://www.check24.de' },
   dsl: { name: 'DSLWEB, Telekom 100 Mbit/s, Oct 2026', url: 'https://www.dslweb.de' },
   biallo: { name: 'Stiftung Warentest via biallo.de, May 2026', url: 'https://www.biallo.de' },
@@ -45,6 +45,7 @@ const PER_M2 = { extra: 2.15, heat: 1.32 };
 const LIFESTYLE = { frugal: { food: 200, personal: 80 }, typical: { food: 254, personal: 150 }, comfort: { food: 340, personal: 320 } };
 const FLATMATES = 3;
 
+const rulesFor = s => RULES_BY_YEAR[s.year] || RULES;
 function costDefs(S, rate) {
   const wg = S.housing === 'wg', share = wg ? FLATMATES : 1, life = LIFESTYLE[S.lifestyle];
   return [
@@ -52,7 +53,7 @@ function costDefs(S, rate) {
     { id: 'extra', name: 'Service charges', note: `Water, waste, building: €${PER_M2.extra.toFixed(2)} per m²`, v: PER_M2.extra * S.size, src: 'bk', locked: true },
     { id: 'heat', name: 'Heating and hot water', note: `€${PER_M2.heat.toFixed(2)} per m²`, v: PER_M2.heat * S.size, src: 'bk', locked: true },
     { id: 'power', name: 'Electricity', note: '1,500 kWh a year at €0.37 per kWh', v: 0.37 * 1500 / 12, src: 'bdew' },
-    { id: 'ticket', name: 'Deutschlandticket', note: 'All local and regional transport', v: 63, src: 'dt' },
+    { id: 'ticket', name: 'Deutschlandticket', note: 'All local and regional transport', v: rulesFor(S).ticket, src: 'dt' },
     { id: 'food', name: 'Food and drinks', note: 'Groceries, drinks and tobacco for one', v: life.food, src: S.lifestyle === 'typical' ? 'evs' : 'est' },
     { id: 'mobile', name: 'Mobile plan', note: 'SIM only, 15 to 20 GB', v: 10, src: 'c24' },
     { id: 'internet', name: 'Home internet', note: wg ? '100 Mbit/s, split 3 ways' : '100 Mbit/s line', v: 23.91 / share, src: 'dsl' },
@@ -63,9 +64,16 @@ function costDefs(S, rate) {
   ];
 }
 
+// Exchange rate: the European Central Bank reference rate, from the free Frankfurter API
+// (no key needed). The last rate fetched is cached, so the page opens with it straight away.
+const FX_URL = 'https://api.frankfurter.dev/v1/latest?base=EUR&symbols=INR';
+const FX_BUILT_IN = { rate: 106.20, date: '2026-10-27', src: 'built-in' };
+const validFx = x => x && Number.isFinite(x.rate) && x.rate >= 50 && x.rate <= 500 && typeof x.date === 'string';
+let fxInfo = (() => { try { const c = JSON.parse(localStorage.getItem('w49calc.fxLive')); return validFx(c) ? { ...c, src: 'cached' } : FX_BUILT_IN; } catch { return FX_BUILT_IN; } })();
+
 // State
 const DEFAULTS = { gross: 60000, per: 'year', taxClass: 1, kids: 0, visa: 'standard', church: false, zusatz: 2.9, age: 28, state: 'BE',
-  city: 'berlin', customRate: 9.75, housing: 'own', size: 45, lifestyle: 'typical', overrides: {}, show: 'month', cur: 'eur', fx: 106.20 };
+  city: 'berlin', customRate: 9.75, housing: 'own', size: 45, lifestyle: 'typical', overrides: {}, show: 'month', cur: 'eur', fx: fxInfo.rate, fxCustom: false, year: currentYear() };
 const EXAMPLES = [
   { id: 'ex1', example: true, label: 'Munich offer', S: { ...DEFAULTS, gross: 72000, city: 'muenchen', state: 'BY', size: 45 } },
   { id: 'ex2', example: true, label: 'Leipzig offer', S: { ...DEFAULTS, gross: 54000, city: 'leipzig', state: 'SN', size: 45 } }
@@ -91,7 +99,8 @@ function cleanState(raw) {
     city: oneOf(r.city, ['other', ...CITIES.map(c => c.id)], D.city), customRate: clamp(r.customRate, 0, 100, D.customRate),
     housing: oneOf(r.housing, ['own', 'wg'], D.housing), size: Math.round(clamp(r.size, 12, 110, D.size)),
     lifestyle: oneOf(r.lifestyle, Object.keys(LIFESTYLE), D.lifestyle), overrides,
-    show: oneOf(r.show, ['month', 'year'], D.show), cur: oneOf(r.cur, ['eur', 'inr'], D.cur), fx: clamp(r.fx, 50, 500, D.fx)
+    show: oneOf(r.show, ['month', 'year'], D.show), cur: oneOf(r.cur, ['eur', 'inr'], D.cur),
+    fxCustom: r.fxCustom === true, fx: r.fxCustom === true ? clamp(r.fx, 50, 500, D.fx) : D.fx, year: oneOf(r.year, YEARS, D.year)
   };
   if (s.taxClass === 2 && s.kids === 0) s.kids = 1;
   return s;
@@ -108,15 +117,16 @@ let scenarios = cleanScenarios(store.get('scenarios', null));
 function compute(s) {
   const city = findCity(s.city);
   const rate = city.id === 'other' ? (+s.customRate || 0) : city.rate;
-  const r = calcNet({ gross: s.gross, taxClass: s.taxClass, children: s.kids, age: s.age, state: s.state, church: s.church, zusatz: s.zusatz });
+  const rules = rulesFor(s);
+  const r = calcNet({ gross: s.gross, taxClass: s.taxClass, children: s.kids, age: s.age, state: s.state, church: s.church, zusatz: s.zusatz }, rules);
   const costs = costDefs(s, rate).map(c => ({ ...c, val: (!c.locked && s.overrides[c.id] != null) ? s.overrides[c.id] : c.v }));
   const costM = costs.reduce((a, c) => a + (+c.val || 0), 0);
   const housingM = costs.filter(c => ['rent', 'extra', 'heat'].includes(c.id)).reduce((a, c) => a + c.val, 0);
   const netM = r.net / 12, kgM = r.kindergeld / 12, cashM = netM + kgM, leftM = cashM - costM;
   const share = cashM > 0 ? housingM / cashM : 0;
-  const bcLimit = s.visa === 'none' ? null : RULES.blueCard[s.visa];
-  const bcNext = s.visa === 'none' ? null : RULES.blueCardNext[s.visa];
-  return { r, city, rate, costs, costM, housingM, netM, kgM, cashM, leftM, share, bcLimit, bcNext };
+  const bcLimit = s.visa === 'none' ? null : rules.blueCard[s.visa];
+  const bcNext = s.visa === 'none' || !rules.blueCardNext ? null : rules.blueCardNext[s.visa];
+  return { rules, r, city, rate, costs, costM, housingM, netM, kgM, cashM, leftM, share, bcLimit, bcNext };
 }
 
 // Formatting
@@ -147,8 +157,11 @@ function housingVerdict(share) {
   if (share < 0.4) return ['warn', 'Stretching'];
   return ['bad', 'Hard to afford'];
 }
-// Defaults are not stored, so returning visitors pick up new yearly values.
-function save() { store.set('state', { ...S, fx: S.fx === DEFAULTS.fx ? undefined : S.fx, zusatz: S.zusatz === DEFAULTS.zusatz ? undefined : S.zusatz }); }
+// Defaults are not stored, so returning visitors pick up new yearly values and today's rate.
+function save() {
+  store.set('state', { ...S, fx: S.fxCustom ? S.fx : undefined, zusatz: S.zusatz === DEFAULTS.zusatz ? undefined : S.zusatz,
+    year: S.year === currentYear() ? undefined : S.year });
+}
 
 // Calculator inputs
 function pressGroup(el, val) { el.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === String(val)))); }
@@ -195,7 +208,26 @@ $('curEUR').onclick = () => { S.cur = 'eur'; syncInputs(); update(); };
 $('curINR').onclick = () => { S.cur = 'inr'; syncInputs(); update(); };
 $('showMonth').onclick = () => { S.show = 'month'; syncInputs(); update(); };
 $('showYear').onclick = () => { S.show = 'year'; syncInputs(); update(); };
-$('fx').oninput = () => { const v = parseFloat($('fx').value); if (v >= 50 && v <= 500) { S.fx = v; update(); } };
+$('fx').oninput = () => { const v = parseFloat($('fx').value); if (v >= 50 && v <= 500) { S.fx = v; S.fxCustom = true; update(); } };
+$('fxReset').onclick = () => { S.fxCustom = false; S.fx = fxInfo.rate; syncInputs(); update(); };
+async function loadFx() {
+  try {
+    const res = await fetch(FX_URL, { cache: 'no-store', signal: AbortSignal.timeout?.(8000) });
+    const j = await res.json(), next = { rate: +j?.rates?.INR, date: j?.date };
+    if (!res.ok || !validFx(next)) throw new Error('bad rate');
+    fxInfo = { ...next, src: 'live' }; store.set('fxLive', next);
+    if (!S.fxCustom) { S.fx = fxInfo.rate; syncInputs(); }
+  } catch {} // keep the cached or built-in rate
+  update();
+}
+function renderFx() {
+  const d = new Date(fxInfo.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const ecb = `₹${fxInfo.rate.toFixed(2)} per euro`;
+  $('fxInfo').textContent = S.fxCustom ? `You're using your own rate. The European Central Bank rate on ${d} was ${ecb}.`
+    : fxInfo.src === 'live' ? `European Central Bank reference rate on ${d}, updated every working day. Money transfer services usually give 1% to 3% less.`
+    : `Today's rate couldn't be loaded, so this is the ${fxInfo.src === 'cached' ? 'last rate fetched' : 'built-in rate'}, from ${d}. Money transfer services usually give 1% to 3% less.`;
+  $('fxReset').hidden = !S.fxCustom;
+}
 
 function renderSizePresets() {
   const P = S.housing === 'wg' ? [['Small room', 18], ['Room + share', 25], ['Large room', 32]]
@@ -269,7 +301,7 @@ function renderCosts(C) {
 // Calculator render
 let C, srTimer;
 function update(opt = {}) {
-  C = compute(S); save();
+  useYear(S.year); C = compute(S); save(); renderYearText(); renderFx();
   const r = C.r, f = S.show === 'month' ? 1 / 12 : 1, unit = S.show;
 
   $('grossInr').textContent = S.cur === 'inr' ? `About ${lakh(S.gross)} a year at ₹${S.fx.toFixed(2)} per euro` : `About ${lakh(S.gross)} a year in rupees`;
@@ -283,8 +315,9 @@ function update(opt = {}) {
 
   let hp = '';
   if (C.bcLimit) {
-    const Y = RULES.year, N = RULES.blueCardNext.year;
+    const Y = C.rules.year, N = C.rules.blueCardNext?.year;
     hp += r.gross < C.bcLimit ? `<span class="pill onhero">${ICON.warn}${eur(Math.ceil(C.bcLimit - r.gross))} below the ${Y} Blue Card salary of ${bcEur(C.bcLimit)}</span>`
+      : !C.bcNext ? `<span class="pill onhero">${ICON.ok}Meets the ${Y} Blue Card salary of ${bcEur(C.bcLimit)}</span>`
       : r.gross < C.bcNext ? `<span class="pill onhero">${ICON.warn}Meets the ${Y} Blue Card salary of ${bcEur(C.bcLimit)}, but is ${eur(Math.ceil(C.bcNext - r.gross))} below the ${bcEur(C.bcNext)} expected from January ${N}</span>`
       : `<span class="pill onhero">${ICON.ok}Meets the ${Y} Blue Card salary of ${bcEur(C.bcLimit)} and the ${bcEur(C.bcNext)} expected from January ${N}</span>`;
   }
@@ -356,7 +389,7 @@ $('saveScenario').onclick = () => { const note = addScenario(); $('toast').textC
 $('saveScenario2').onclick = () => { const note = addScenario(); $('cmpToast').textContent = `Added ${scenarioLabel(S)}.${note}`; renderCompare(); };
 $('copySummary').onclick = () => {
   const r = C.r, t = [
-    `Wings49 salary estimate (tax year ${RULES.year})`,
+    `Wings49 salary estimate (tax year ${C.rules.year})`,
     `Offer: ${eur(r.gross)} gross a year, ${['', 'single', 'single parent', 'married (class III)', 'married (class IV)'][S.taxClass]}, ${S.kids} child${S.kids === 1 ? '' : 'ren'}`,
     `City: ${C.city.name}, ${S.housing === 'wg' ? 'shared flat' : 'own flat'} ${S.size} m²`,
     `Take-home: ${eur(C.netM)} a month (${inr(C.netM)})`,
@@ -364,8 +397,8 @@ $('copySummary').onclick = () => {
     C.kgM ? `Child benefit: ${eur(C.kgM)} a month, included in the left-over figure` : '',
     `Living costs: ${eur(C.costM)} a month, housing ${(C.share * 100).toFixed(0)}% of take-home`,
     `Left over: ${eur(C.leftM)} a month (${inr(C.leftM)})`,
-    C.bcLimit ? (r.gross < C.bcLimit ? `Below the ${RULES.year} EU Blue Card salary of ${bcEur(C.bcLimit)}` : `Meets the ${RULES.year} EU Blue Card salary of ${bcEur(C.bcLimit)}`) : '',
-    C.bcLimit ? `${r.gross < C.bcNext ? 'Below' : 'Meets'} the ${bcEur(C.bcNext)} expected from January ${RULES.blueCardNext.year} (not official yet)` : '',
+    C.bcLimit ? (r.gross < C.bcLimit ? `Below the ${C.rules.year} EU Blue Card salary of ${bcEur(C.bcLimit)}` : `Meets the ${C.rules.year} EU Blue Card salary of ${bcEur(C.bcLimit)}`) : '',
+    C.bcNext ? `${r.gross < C.bcNext ? 'Below' : 'Meets'} the ${bcEur(C.bcNext)} expected from January ${C.rules.blueCardNext.year} (not official yet)` : '',
     `Estimate only, not tax advice.`
   ].filter(Boolean).join('\n');
   const done = () => { $('toast').textContent = 'Summary copied.'; $('copyFallback').hidden = true; };
@@ -395,14 +428,14 @@ function renderCompare() {
     ${row('Left over per month', x => `<td class="${x.C.leftM < 0 ? 'neg' : isBest(x) ? 'best' : ''}">${fmt(x.C.leftM)}<div class="minibar" style="width:${Math.max(0, x.C.leftM / maxLeft * 100).toFixed(1)}%"></div></td>`, 'key')}
     ${row('Saved per year', x => `<td>${x.C.leftM > 0 ? lakh(x.C.leftM * 12) : 'None'}</td>`)}
     ${row('Housing share', x => { const [c, w] = housingVerdict(x.C.share); return `<td>${pill(c, `${w} (${(x.C.share * 100).toFixed(0)}%)`)}</td>`; })}
-    ${row('EU Blue Card', x => `<td>${x.C.bcLimit ? (x.C.r.gross < x.C.bcLimit ? pill('warn', eur(Math.ceil(x.C.bcLimit - x.C.r.gross)) + ' short') : x.C.r.gross < x.C.bcNext ? pill('warn', `${eur(Math.ceil(x.C.bcNext - x.C.r.gross))} short for ${RULES.blueCardNext.year}`) : pill('good', 'Meets')) : '<span style="font-weight:400;color:var(--muted)">Not checked</span>'}</td>`)}
+    ${row('EU Blue Card', x => `<td>${x.C.bcLimit ? (x.C.r.gross < x.C.bcLimit ? pill('warn', eur(Math.ceil(x.C.bcLimit - x.C.r.gross)) + ' short') : x.C.bcNext && x.C.r.gross < x.C.bcNext ? pill('warn', `${eur(Math.ceil(x.C.bcNext - x.C.r.gross))} short for ${x.C.rules.blueCardNext.year}`) : pill('good', 'Meets')) : '<span style="font-weight:400;color:var(--muted)">Not checked</span>'}</td>`)}
     ${row('<span class="sr-only">Actions</span>', x => x.live ? '<td></td>' : `<td><button type="button" class="linkbtn" data-load="${esc(x.id)}">Open in calculator</button></td>`)}
   </tbody></table>`;
 }
 $('cmp').addEventListener('click', e => {
   const del = e.target.closest('[data-del]'), load = e.target.closest('[data-load]');
   if (del) { scenarios = scenarios.filter(s => s.id !== del.dataset.del); store.set('scenarios', scenarios); renderCompare(); }
-  if (load) { const sc = scenarios.find(s => s.id === load.dataset.load); if (sc) { S = { ...JSON.parse(JSON.stringify(sc.S)), cur: S.cur, fx: S.fx, show: S.show }; syncInputs(); location.hash = 'calculator'; update(); } }
+  if (load) { const sc = scenarios.find(s => s.id === load.dataset.load); if (sc) { S = { ...JSON.parse(JSON.stringify(sc.S)), cur: S.cur, fx: S.fx, fxCustom: S.fxCustom, show: S.show }; syncInputs(); location.hash = 'calculator'; update(); } }
 });
 
 // Explorer
@@ -502,17 +535,7 @@ function renderExplorer() {
 // Method
 function renderMethod() {
   const L = (t, u) => u ? `<a href="${u}" target="_blank" rel="noopener">${t}</a>` : t;
-  const SRC = {
-    tariff: ['finanz-tools.de, income tax formula 2026', 'https://www.finanz-tools.de/einkommensteuer/berechnung-formeln/2026'],
-    bbg: ['Lohnsteuer kompakt, 2026 ceilings', 'https://www.lohnsteuer-kompakt.de/steuerwissen/beitragsbemessungsgrenzen-2026-diese-werte-gelten-ab-januar'],
-    rates: ['Haufe, 2026 contribution rates', 'https://www.haufe.de/personal/entgelt/beitragssaetze-zur-sozialversicherung_78_493770.html'],
-    soli: ['TK, Soli 2026', 'https://www.tk.de/firmenkunden/service/fachthemen/fachthema-beitraege/solidaritaetszuschlag-2075802'],
-    kg: ['steuerschroeder.de, Kindergeld 2026', 'https://www.steuerschroeder.de/Steuerrechner/Kindergeld.html'],
-    bc: ['The Local, Blue Card 2026', 'https://www.thelocal.de/20251217/the-salary-you-need-in-germany-in-2026-to-get-an-eu-blue-card'],
-    bcNext: ['Schlun & Elseven, 2027 outlook', 'https://se-legal.de/category/residence-permit/?lang=en'],
-    vp: ['steuerschroeder.de, Vorsorgepauschale 2026', 'https://www.steuerschroeder.de/blog/vorsorgepauschale-im-lohnsteuerabzugsverfahren-ab-2026/'],
-    pap: ['BMF payroll tax flowchart 2026 (PAP, Anlage 1)', 'https://www.ihk-muenchen.de/ihk/documents/Recht-Steuern/Steuerrecht/Einkommensteuer/2025-11-12-PAP-2026-anlage-1.pdf']
-  };
+  const SRC = RULES.sources;
   const A = RULES, Rt = A.rates, t = A.tariff, pct = r => +(r * 100).toFixed(2) + '%';
   const rows = [
     ['Tax-free income each year', eur(t.gfb), 'tariff'], ['Where the tax rate steps up', `${eur(t.z2)}, ${eur(t.z3)} and ${eur(t.z4)} of taxable income`, 'tariff'],
@@ -562,27 +585,14 @@ function renderMethod() {
     X('Church tax', 'Kirchensteuer', `Only for registered members of the Catholic or Protestant church: ${pct(A.church.BY)} of income tax in Bavaria and Baden-Württemberg, ${pct(A.church.other)} everywhere else.`),
     X('Child benefit', 'Kindergeld', `${eur(A.kindergeld)} a month per child, paid to parents by the Familienkasse rather than through your salary. We add it to your monthly money. Children also lower the solidarity surcharge and church tax.`)
   ].join('');
-  $('rulesTax').innerHTML = `<thead><tr><th>What</th><th>2026 figure</th><th>Source</th></tr></thead><tbody>${rows.map(([a, b, s]) => `<tr><td>${a}</td><td class="v">${b}</td><td class="s">${L(...SRC[s])}</td></tr>`).join('')}</tbody>`;
+  $('rulesTax').innerHTML = `<thead><tr><th>What</th><th>${A.year} figure</th><th>Source</th></tr></thead><tbody>${rows.map(([a, b, s]) => `<tr><td>${a}</td><td class="v">${b}</td><td class="s">${L(...SRC[s])}</td></tr>`).join('')}</tbody>`;
   const cs = costDefs({ ...DEFAULTS }, 15.19).filter(c => c.id !== 'rent');
   $('rulesCost').innerHTML = `<thead><tr><th>Cost</th><th>Default</th><th>Source</th></tr></thead><tbody>
     <tr><td>Rent (cold)</td><td class="v">${CITIES.length} cities, ${eur(Math.min(...CITIES.map(c => c.rate)), 2)} to ${eur(Math.max(...CITIES.map(c => c.rate)), 2)} per m²</td><td class="s">${Object.values(RENT_SRC).map(s => L(s.name, s.url)).join(', ')}</td></tr>
     ${cs.map(c => `<tr><td>${c.name}</td><td class="v">${c.id === 'extra' || c.id === 'heat' ? '€' + PER_M2[c.id].toFixed(2) + ' per m²' : c.id === 'food' || c.id === 'personal' ? `€${LIFESTYLE.frugal[c.id]}, €${LIFESTYLE.typical[c.id]} or €${LIFESTYLE.comfort[c.id]}` : eur(c.v, 2)}</td><td class="s">${c.id === 'food' ? 'Typical: ' + L(COST_SRC.evs.name, COST_SRC.evs.url) + '. Saver and Comfortable: Wings49 estimates' : L(COST_SRC[c.src].name, COST_SRC[c.src].url)}</td></tr>`).join('')}
   </tbody>`;
-  const T = [
-    ['€50,000, single: income tax', calcNet({ gross: 50000, taxClass: 1, children: 0, age: 30 }).incomeTax, 6788, 'BMF test table, PAP 2026'],
-    ['€100,000, single: income tax', calcNet({ gross: 100000, taxClass: 1, children: 0, age: 30 }).incomeTax, 23248, 'BMF test table, PAP 2026'],
-    ['€60,000, single parent: income tax', calcNet({ gross: 60000, taxClass: 2, children: 1, age: 30 }).incomeTax, 8091, 'BMF test table, PAP 2026'],
-    ['€110,000, married, class III: income tax', calcNet({ gross: 110000, taxClass: 3, children: 0, age: 30 }).incomeTax, 18252, 'BMF test table, PAP 2026'],
-    ['Tax at the allowance, €12,348', incomeTax(12348), 0, 'Income tax formula, first zone'],
-    ['Tax at €17,799 (zone edge)', incomeTax(17799), 1034, 'Both formulas meet'],
-    ['€55,000, married, class III: income tax', calcNet({ gross: 55000, taxClass: 3, children: 0, age: 30 }).incomeTax, 3802, 'BMF calculator, PAP 2026'],
-    ['€55,000, single parent, 3 children: income tax', calcNet({ gross: 55000, taxClass: 2, children: 3, age: 30 }).incomeTax, 6893, 'BMF calculator, PAP 2026'],
-    ['Soli at €45,000, single', Math.round(calcNet({ gross: 45000, taxClass: 1, age: 30 }).soli), 0, 'Below €20,350 of tax'],
-    ['Social security at €20,000 (reduced band)', Math.round(calcNet({ gross: 20000, taxClass: 1, age: 30 }).social), Math.round(12 * 2000 / 1397 * (20000 / 12 - 603) * 0.2175), 'Übergangsbereich, €603 to €2,000 a month'],
-    ['Health capped above €69,750', Math.round(calcNet({ gross: 120000, taxClass: 1, age: 30 }).kv), Math.round(69750 * (0.073 + 0.0145)), '2026 ceiling']
-  ];
-  $('tests').innerHTML = `<thead><tr><th>Check</th><th>Result</th><th>Expected</th><th></th></tr></thead><tbody>${T.map(([n, got, exp, note]) =>
-    `<tr><td>${n}<div class="s" style="color:var(--muted);font-size:12.5px">${note}</div></td><td class="v">${eur(got)}</td><td class="v">${eur(exp)}</td><td>${Math.abs(got - exp) <= 1 ? '<span class="ok">Pass</span>' : '<span class="fail">Fail</span>'}</td></tr>`).join('')}</tbody>`;
+  $('tests').innerHTML = `<thead><tr><th>Check</th><th>Result</th><th>Expected</th><th></th></tr></thead><tbody>${runChecks(A).map(c =>
+    `<tr><td>${c.label}<div class="s" style="color:var(--muted);font-size:12.5px">${c.note}</div></td><td class="v">${eur(c.got)}</td><td class="v">${eur(c.expected)}</td><td>${c.pass ? '<span class="ok">Pass</span>' : '<span class="fail">Fail</span>'}</td></tr>`).join('')}</tbody>`;
 }
 
 // Routing
@@ -604,11 +614,18 @@ function renderVisible() {
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => view === 'explorer' && renderExplorer(), 150); });
 window.addEventListener('hashchange', () => { route(); if (VIEWS.includes(location.hash.slice(1))) window.scrollTo({ top: 0 }); });
 
-// Page text that repeats figures from RULES
-$('yearTag').textContent = `Tax year ${RULES.year}`;
-$('asOf').textContent = RULES.asOf;
+// Page text that repeats figures from RULES. With more than one year of rules, the header
+// shows a year switch; with one, just the year.
+function renderYearText() {
+  $('yearBox').innerHTML = YEARS.length > 1
+    ? `<div class="seg2" role="group" aria-label="Tax year">${YEARS.map(y => `<button type="button" data-year="${y}" aria-pressed="${y === S.year}">${y}</button>`).join('')}</div>`
+    : `<span class="year">Tax year ${RULES.year}</span>`;
+  $('asOf').textContent = RULES.asOf;
+  document.querySelectorAll('.ruleYear').forEach(el => { el.textContent = RULES.year; });
+  $('zusatzHint').textContent = `Each insurer (TK, AOK, Barmer and others) sets its own. ${RULES.zusatzAverage}% is the ${RULES.year} average.`;
+  $('ageHint').textContent = `From age 23, people without children pay ${+(RULES.rates.pvChildless * 100).toFixed(2)}% more for care insurance.`;
+}
+$('yearBox').addEventListener('click', e => { const b = e.target.closest('[data-year]'); if (!b) return; S.year = +b.dataset.year; syncInputs(); update(); });
 $('cityInput').placeholder = `Search ${CITIES.length} cities`;
-$('zusatzHint').textContent = `Each insurer (TK, AOK, Barmer and others) sets its own. ${RULES.zusatzAverage}% is the ${RULES.year} average.`;
-$('ageHint').textContent = `From age 23, people without children pay ${+(RULES.rates.pvChildless * 100).toFixed(2)}% more for care insurance.`;
 
-syncInputs(); update(); route();
+syncInputs(); update(); route(); loadFx();
