@@ -1,5 +1,7 @@
 # Wings49 salary calculator
 
+**Live site: [income-tax-calculator.dhruvi-jain.workers.dev](https://income-tax-calculator.dhruvi-jain.workers.dev)**
+
 A German salary calculator for people moving to Germany. It works out take-home pay, living costs and savings for a job offer, compares offers and cities, and checks the EU Blue Card salary. Figures can be shown in euros or rupees.
 
 It is a static site: plain HTML, CSS and JavaScript, with no build step, no framework and no server code.
@@ -19,7 +21,8 @@ It is a static site: plain HTML, CSS and JavaScript, with no build step, no fram
 ## Running and deploying
 
 - **Locally:** open `index.html` in a browser. No install needed.
-- **Deploying:** upload the files above to any static host (Netlify, Vercel, S3, nginx, cPanel and so on). `check.js`, `README.md` and `UPDATING.md` don't need to be served, but it does no harm.
+- **Deploying (current setup):** the live site is a Cloudflare Worker named `income-tax-calculator`. To update it: run `node check.js`, then in the Cloudflare dashboard go to **Workers & Pages → income-tax-calculator → upload new version**, and upload exactly these 6 files: `index.html`, `styles.css`, `engine.js`, `app.js`, `logo.png` and `_headers`. Each upload replaces the whole site. Don't upload `check.js`, `README.md`, `UPDATING.md` or `.git`.
+- **Other hosts:** it also runs on any static host (Netlify, Vercel, S3, nginx and so on). Cloudflare reads the security settings from `_headers`; on other hosts, set the same headers in that host's own configuration.
 - **Before every deploy** that touches `engine.js`, run `node check.js` (Node 18 or newer). It exits with code 1 if any check fails, so it can be added to a CI pipeline as a gate.
 
 ## External services
